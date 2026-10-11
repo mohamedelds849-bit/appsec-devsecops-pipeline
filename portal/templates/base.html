@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}AgriSouss orders{% endblock %} (lab)</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header>
+    <strong>AgriSouss SARL</strong> &middot; order portal <span class="lab">LAB &mdash; synthetic data</span>
+    {% if g.user %}
+      <form class="inline" method="post" action="{{ url_for('auth.logout') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <span>{{ g.user['username'] }} ({{ g.user['role'] }})</span>
+        <button type="submit">Log out</button>
+      </form>
+    {% endif %}
+  </header>
+  <main>{% block content %}{% endblock %}</main>
+</body>
+</html>

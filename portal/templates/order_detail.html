@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Order {{ order['id'] }}{% endblock %}
+{% block content %}
+<h1>Order #{{ order['id'] }}</h1>
+<dl>
+  <dt>Product</dt><dd>{{ order['product'] }}</dd>
+  <dt>Quantity</dt><dd>{{ order['quantity_kg'] }} kg</dd>
+  <dt>Total</dt><dd>{{ order['total_mad'] }} MAD</dd>
+  <dt>Status</dt><dd>{{ order['status'] }}</dd>
+  <dt>Note</dt><dd class="note">{{ order['note'] }}</dd>
+</dl>
+{% if g.user['role'] == 'customer' %}
+<form method="post" action="{{ url_for('orders.add_note', order_id=order['id']) }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label>Delivery note <textarea name="note" maxlength="500">{{ order['note'] }}</textarea></label>
+  <button type="submit">Save note</button>
+</form>
+{% else %}
+<form method="post" action="{{ url_for('orders.change_status', order_id=order['id']) }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label>Status
+    <select name="status">
+      {% for s in statuses %}<option value="{{ s }}" {% if s == order['status'] %}selected{% endif %}>{{ s }}</option>{% endfor %}
+    </select>
+  </label>
+  <button type="submit">Update status</button>
+</form>
+{% endif %}
+<p><a href="{{ url_for('orders.list_orders') }}">Back to orders</a></p>
+{% endblock %}

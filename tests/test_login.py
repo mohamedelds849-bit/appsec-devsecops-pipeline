@@ -80,3 +80,16 @@ def test_login_does_not_redirect_offsite(app, client):
     resp = login(client, app, "client.a", next_url="https://evil.example/")
     assert resp.status_code == 302
     assert resp.headers["Location"].endswith("/orders")
+
+
+def test_security_events_are_logged_without_the_password(app, client, as_user, caplog):
+    """A09 Logging: failed logins and authz denials leave a trace; secrets never do."""
+    caplog.set_level("INFO")
+    secret_attempt = "Not-The-Password-42"
+    login(client, app, "client.a", password=secret_attempt)
+    assert "login_failed" in caplog.text
+    assert secret_attempt not in caplog.text
+    c = as_user("client.a")
+    c.get(f"/orders/{app.test_users['client.b']['order']}")
+    assert "order_not_found_or_denied" in caplog.text
+    assert app.test_users["client.a"]["password"] not in caplog.text

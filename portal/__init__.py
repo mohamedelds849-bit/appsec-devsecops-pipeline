@@ -15,7 +15,7 @@ def create_app(overrides=None):
     app = Flask(__name__, instance_relative_config=True)
     app.config.update(load_config(overrides))
     # Jinja autoescaping is on by default for .html templates; we never disable it and
-    # never use the "safe" filter or Markup on user data (Semgrep + Bandit B701/B703 watch this).
+    # never use the "safe" filter or Markup on user data (Semgrep + Bandit B701/B704 watch this).
     app.jinja_env.autoescape = True
     app.logger.setLevel(logging.INFO)
 

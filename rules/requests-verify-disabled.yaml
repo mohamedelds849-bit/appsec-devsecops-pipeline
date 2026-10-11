@@ -1,0 +1,24 @@
+rules:
+  - id: requests-verify-disabled
+    message: >-
+      TLS certificate verification is disabled (verify=False). Anyone on the network path
+      can impersonate the server (man-in-the-middle). Fix the CA bundle instead.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-295: Improper Certificate Validation"
+      owasp: "A02:2021 - Cryptographic Failures"
+      asvs: "V9.2.1"
+      confidence: HIGH
+      references:
+        - https://requests.readthedocs.io/en/latest/user/advanced/#ssl-cert-verification
+    pattern-either:
+      - pattern: requests.$METHOD(..., verify=False, ...)
+      - patterns:
+          - pattern-inside: |
+              $S = requests.Session()
+              ...
+          - pattern-either:
+              - pattern: $S.verify = False
+              - pattern: $S.$METHOD(..., verify=False, ...)

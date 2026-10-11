@@ -1,0 +1,20 @@
+rules:
+  - id: flask-debug-enabled
+    message: >-
+      Flask debug mode is enabled. The Werkzeug debugger shows stack traces and offers an
+      interactive console: never enable it outside a developer's own machine.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-489: Active Debug Code"
+      owasp: "A05:2021 - Security Misconfiguration"
+      asvs: "V14.3.2"
+      confidence: HIGH
+      references:
+        - https://flask.palletsprojects.com/en/stable/debugging/
+    pattern-either:
+      - pattern: $APP.run(..., debug=True, ...)
+      - pattern: $APP.debug = True
+      - pattern: $APP.config["DEBUG"] = True
+      - pattern: '$APP.config.update(..., {..., "DEBUG": True, ...}, ...)'

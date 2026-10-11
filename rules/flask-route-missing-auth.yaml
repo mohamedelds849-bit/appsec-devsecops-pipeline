@@ -1,0 +1,35 @@
+rules:
+  - id: flask-route-missing-auth
+    message: >-
+      Flask route '$F' has no @login_required / @role_required decorator. In this project
+      every route is private by default (deny by default). If the route is public on
+      purpose, add its name to the allow-list regex of this rule after review.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-862: Missing Authorization"
+      owasp: "A01:2021 - Broken Access Control"
+      asvs: "V4.1.3, V4.1.5"
+      confidence: MEDIUM
+      references:
+        - https://owasp.org/Top10/A01_2021-Broken_Access_Control/
+    patterns:
+      - pattern: |
+          @$BP.route(...)
+          def $F(...):
+              ...
+      - pattern-not: |
+          @$BP.route(...)
+          @login_required
+          def $F(...):
+              ...
+      - pattern-not: |
+          @$BP.route(...)
+          @role_required(...)
+          def $F(...):
+              ...
+      # Reviewed public views (allow-list). Keep it short and justified in docs/CONTROLS.md.
+      - metavariable-regex:
+          metavariable: $F
+          regex: ^(?!(login|healthz)$)

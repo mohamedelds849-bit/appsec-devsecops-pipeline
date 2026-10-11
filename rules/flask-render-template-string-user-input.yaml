@@ -1,0 +1,26 @@
+rules:
+  - id: flask-render-template-string-user-input
+    message: >-
+      Request data reaches render_template_string(). The input is compiled as a Jinja
+      template: server-side template injection (SSTI), which can lead to code execution.
+      Use render_template() with a file template and pass the data as a variable.
+    languages: [python]
+    severity: ERROR
+    mode: taint
+    metadata:
+      category: security
+      cwe: "CWE-1336: Improper Neutralization of Special Elements Used in a Template Engine"
+      owasp: "A03:2021 - Injection"
+      asvs: "V5.2.5"
+      confidence: HIGH
+      references:
+        - https://portswigger.net/web-security/server-side-template-injection
+    pattern-sources:
+      - pattern-either:
+          - pattern: flask.request.$ATTR
+          - pattern: flask.request.$ATTR.get(...)
+          - pattern: flask.request.$ATTR[...]
+    pattern-sinks:
+      - patterns:
+          - pattern-inside: flask.render_template_string($TPL, ...)
+          - focus-metavariable: $TPL

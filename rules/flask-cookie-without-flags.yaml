@@ -1,0 +1,21 @@
+rules:
+  - id: flask-cookie-without-flags
+    message: >-
+      Cookie set without secure=True, httponly=True and samesite. Without them the cookie
+      can travel over plain HTTP, be read by JavaScript (XSS) or be sent cross-site (CSRF).
+    languages: [python]
+    severity: WARNING
+    metadata:
+      category: security
+      cwe: "CWE-614: Sensitive Cookie in HTTPS Session Without Secure Attribute"
+      owasp: "A05:2021 - Security Misconfiguration"
+      asvs: "V3.4.1, V3.4.2, V3.4.3"
+      confidence: MEDIUM
+      references:
+        - https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html
+    pattern-either:
+      - patterns:
+          - pattern: $RESP.set_cookie(...)
+          - pattern-not: $RESP.set_cookie(..., secure=True, httponly=True, samesite=$S, ...)
+      - pattern: $APP.config["SESSION_COOKIE_SECURE"] = False
+      - pattern: $APP.config["SESSION_COOKIE_HTTPONLY"] = False

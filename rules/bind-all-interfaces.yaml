@@ -1,0 +1,19 @@
+rules:
+  - id: bind-all-interfaces
+    message: >-
+      The server listens on all network interfaces (0.0.0.0 / ::). This lab app must only
+      listen on 127.0.0.1; exposure is the job of a hardened reverse proxy.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-1327: Binding to an Unrestricted IP Address"
+      owasp: "A05:2021 - Security Misconfiguration"
+      confidence: MEDIUM
+      references:
+        - https://cwe.mitre.org/data/definitions/1327.html
+    pattern-either:
+      - pattern: $APP.run(..., host="0.0.0.0", ...)
+      - pattern: $APP.run(..., host="::", ...)
+      - pattern: serve(..., host="0.0.0.0", ...)
+      - pattern: HOST = "0.0.0.0"

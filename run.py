@@ -14,7 +14,8 @@ HOST = "127.0.0.1"   # loopback only: the lab app is never exposed to the networ
 
 def main():
     port = int(os.environ.get("PORTAL_PORT", "8080"))
-    serve(create_app(), host=HOST, port=port)
+    # ident: the value Waitress puts in its Server/Via headers (no product name).
+    serve(create_app(), host=HOST, port=port, ident="portal")
 
 
 if __name__ == "__main__":

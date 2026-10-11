@@ -1,0 +1,235 @@
+name: security
+# DevSecOps pipeline for the AgriSouss lab portal.
+#   tests     -> pytest defense tests + mutation check (do the tests catch a regression?)
+#   sast      -> Semgrep (custom rules tested with semgrep --test + OWASP/Python registry) and Bandit
+#   secrets   -> Gitleaks over the whole git history
+#   sca       -> pip-audit (Python dependencies, OSV/PyPI advisories)
+#   container -> Trivy: filesystem (deps, secrets, Dockerfile misconfig) + built image
+#   dast      -> OWASP ZAP baseline (passive) against the app running in the runner
+# Quality gate: each job fails on high/critical findings (details per job below).
+# Supply chain: GitHub actions pinned to a full commit SHA, tools pinned to a version,
+# Docker images pinned to a digest, the Gitleaks binary verified against its SHA-256.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 5 * * 1"   # weekly: new CVEs appear even when the code does not change
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.11"
+  SEMGREP_VERSION: "1.180.0"
+  BANDIT_VERSION: "1.9.4"
+  PIP_AUDIT_VERSION: "2.10.1"
+  GITLEAKS_VERSION: "8.30.1"
+  GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+  # Trivy 0.69.4 and trivy-action <= 0.34.2 were compromised in March 2026 (CVE-2026-33634):
+  # we run the official image at a post-incident version, pinned by digest.
+  TRIVY_IMAGE: "aquasec/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa"
+  ZAP_IMAGE: "ghcr.io/zaproxy/zaproxy:2.17.0@sha256:7aaa659b0d43078febd82e29bad112285c370727e86ab8340444220e17d9f0d2"
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install -r requirements.txt pytest==9.1.1
+      - name: Defense tests
+        run: python -m pytest -q
+      - name: Mutation check (each security control removed -> a test must fail)
+        run: python scripts/mutation_check.py
+
+  sast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write   # SARIF upload to code scanning
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install "semgrep==${SEMGREP_VERSION}" "bandit[sarif]==${BANDIT_VERSION}"
+      - name: Test the custom Semgrep rules (ruleid / ok fixtures)
+        run: semgrep --test rules/
+      - name: Semgrep scan (custom + OWASP Top 10 + Python registry rules)
+        run: |
+          semgrep scan --metrics=off \
+            --config rules/ --config p/owasp-top-ten --config p/python \
+            --json-output=semgrep.json --sarif-output=semgrep.sarif
+      - name: Semgrep quality gate (fail on ERROR / HIGH / CRITICAL)
+        run: python scripts/semgrep_gate.py semgrep.json
+      - name: Bandit report (all severities, SARIF)
+        if: always()
+        run: bandit -r portal run.py -f sarif -o bandit.sarif --exit-zero
+      - name: Bandit quality gate (fail on HIGH severity, MEDIUM+ confidence)
+        run: bandit -r portal run.py --severity-level high --confidence-level medium
+      - name: Upload Semgrep SARIF
+        if: always()
+        continue-on-error: true   # code scanning needs a public repo or GitHub Advanced Security
+        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
+      - name: Upload Bandit SARIF
+        if: always()
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        with:
+          sarif_file: bandit.sarif
+          category: bandit
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: sast-reports
+          path: |
+            semgrep.json
+            semgrep.sarif
+            bandit.sarif
+
+  secrets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0          # scan every commit, not only the last one
+          persist-credentials: false
+      - name: Install Gitleaks (pinned version, checksum verified)
+        run: |
+          curl -sSL -o gitleaks.tgz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  gitleaks.tgz" | sha256sum -c -
+          tar -xzf gitleaks.tgz gitleaks
+      - name: Gitleaks (fails on any secret in the git history)
+        run: ./gitleaks git --redact --verbose --report-format sarif --report-path gitleaks.sarif .
+      - name: Upload Gitleaks SARIF
+        if: always()
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        with:
+          sarif_file: gitleaks.sarif
+          category: gitleaks
+
+  sca:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install "pip-audit==${PIP_AUDIT_VERSION}"
+      - name: pip-audit report (JSON)
+        if: always()
+        run: pip-audit -r requirements.txt --desc -f json -o pip-audit.json || true
+      - name: pip-audit gate (fails on ANY known vulnerability with a published advisory)
+        run: pip-audit -r requirements.txt --desc
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: pip-audit-report
+          path: pip-audit.json
+
+  container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build image
+        run: docker build -t agrisouss-portal:ci .
+      - name: Trivy filesystem report (all severities, SARIF)
+        if: always()
+        run: |
+          docker run --rm -v "$PWD:/src" "$TRIVY_IMAGE" fs --quiet \
+            --scanners vuln,secret,misconfig --format sarif --output /src/trivy-fs.sarif /src
+      - name: Trivy filesystem gate (HIGH/CRITICAL with a fix available)
+        run: |
+          docker run --rm -v "$PWD:/src" "$TRIVY_IMAGE" fs --quiet \
+            --scanners vuln,secret,misconfig --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 /src
+      - name: Trivy image report (all severities, SARIF)
+        if: always()
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD:/src" "$TRIVY_IMAGE" \
+            image --quiet --format sarif --output /src/trivy-image.sarif agrisouss-portal:ci
+      - name: Trivy image gate (HIGH/CRITICAL with a fix available)
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$TRIVY_IMAGE" \
+            image --quiet --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 agrisouss-portal:ci
+      - name: Upload Trivy fs SARIF
+        if: always()
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        with:
+          sarif_file: trivy-fs.sarif
+          category: trivy-fs
+      - name: Upload Trivy image SARIF
+        if: always()
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        with:
+          sarif_file: trivy-image.sarif
+          category: trivy-image
+
+  dast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build and start the portal (loopback only, throwaway secret)
+        run: |
+          docker build -t agrisouss-portal:ci .
+          SECRET="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
+          echo "::add-mask::$SECRET"
+          docker run -d --name portal --network host -e PORTAL_SECRET_KEY="$SECRET" agrisouss-portal:ci
+          for i in $(seq 1 30); do
+            curl -fsS -o /dev/null http://127.0.0.1:8080/login && exit 0
+            sleep 1
+          done
+          docker logs portal
+          exit 1
+      - name: ZAP baseline (passive scan; FAIL rules in .zap/rules.tsv break the build)
+        run: |
+          mkdir -p zap-out && cp .zap/rules.tsv zap-out/ && chmod -R a+rwX zap-out
+          docker run --rm --network host -v "$PWD/zap-out:/zap/wrk:rw" "$ZAP_IMAGE" \
+            zap-baseline.py -t http://127.0.0.1:8080/login -c rules.tsv -I \
+              -r zap.html -J zap.json -w zap.md
+      - name: Job summary
+        if: always()
+        run: |
+          echo '## ZAP baseline' >> "$GITHUB_STEP_SUMMARY"
+          cat zap-out/zap.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo 'no report' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: zap-report
+          path: zap-out/
+      - name: Stop portal
+        if: always()
+        run: docker rm -f portal || true

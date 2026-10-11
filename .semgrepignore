@@ -1,0 +1,5 @@
+# rules/*.py are deliberately insecure lint fixtures for `semgrep --test`;
+# they are tested separately and must not be scanned as application code.
+rules/
+tests/
+scripts/

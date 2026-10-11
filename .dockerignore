@@ -1,0 +1,11 @@
+.git
+.github
+tests
+rules
+docs
+scripts
+instance
+**/__pycache__
+.pytest_cache
+*.md
+zap-out

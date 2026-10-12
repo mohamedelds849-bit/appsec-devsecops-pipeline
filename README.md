@@ -125,8 +125,8 @@ C:\Users\VIET\tools\gitleaks\gitleaks.exe git --redact .
 - ZAP baseline is passive and **unauthenticated**: it only sees the login page.
 - SAST/SCA only know known patterns and published CVEs; **business-logic** authorization is
   covered by hand-written tests, not by any scanner.
-- The pipeline has not run on GitHub yet; tool pins (digests, SHAs) were resolved on
-  2026-10-11 and must be confirmed by the first green run.
+- First CI run (2026-10-12) was red on purpose-built grounds: the Trivy image gate blocked 2 HIGH
+  CVEs in base-image packaging tools; fixed by removing them (REVIEW.md §5). Run 2 is 6/6 green.
 
 ## License
 

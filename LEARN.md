@@ -256,20 +256,18 @@ référentiel d'exigences vérifiables (par exemple V4.2.1 pour l'IDOR). Mon fic
 
 ## 8. Ligne de CV (honnête, format §7)
 
-**Tant que le pipeline n'a pas tourné en vert sur GitHub :**
+**Workflow `security` vert sur GitHub depuis le 12 octobre 2026** (run `38194315086`, 6/6 jobs ; le run 1 avait été bloqué par le seuil Trivy, voir REVIEW.md §5) :
 
 - **FR** — **AppSec DevSecOps Pipeline** (Python/Flask, Semgrep, Bandit, Trivy, ZAP) : portail
   web de lab sécurisé dès la conception (IDOR, CSRF, CSP, cookies, SQL paramétré), 78 tests de
   défense vérifiés par mutation (16/16) ; 7 règles Semgrep maison testées ; pipeline GitHub
-  Actions écrit (SAST, secrets, SCA, image, DAST passif, seuil high/critical). Jamais déployé.
+  Actions qui bloque le build sur high/critical (SAST, secrets, SCA, image, DAST passif) : il a
+  bloqué 2 CVE HIGH de l'image de base dès le premier run. Jamais déployé.
 - **EN** — **AppSec DevSecOps Pipeline** (Python/Flask, Semgrep, Bandit, Trivy, ZAP): secure-by-
   design lab web portal (IDOR, CSRF, CSP, cookie flags, parameterized SQL), 78 defense tests
-  checked by mutation (16/16); 7 custom Semgrep rules with tests; GitHub Actions pipeline
-  written (SAST, secrets, SCA, image, passive DAST, high/critical gate). Never deployed.
-
-**Quand le workflow `security` est vert sur GitHub** (et seulement à ce moment-là), remplacer
-« pipeline GitHub Actions écrit » par « pipeline GitHub Actions qui bloque le build sur
-high/critical » / "GitHub Actions pipeline that fails the build on high/critical findings".
+  checked by mutation (16/16); 7 custom Semgrep rules with tests; GitHub Actions pipeline that
+  fails the build on high/critical findings (SAST, secrets, SCA, image, passive DAST); it blocked
+  2 HIGH CVEs in the base image on its first run. Never deployed.
 
 **À ne jamais dire :**
 - « déployé en production », « utilisé par AgriSouss », « application d'un client » ;

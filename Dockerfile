@@ -9,7 +9,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Build tools are not needed at run time: removing setuptools (which vendors
+# jaraco.context, CVE-2026-23949) and wheel (CVE-2026-24049) shrinks the attack
+# surface. Both were flagged HIGH by the Trivy image gate on the first CI run.
+RUN pip install --no-cache-dir -r requirements.txt \
+    && pip uninstall -y setuptools wheel
 
 COPY portal/ portal/
 COPY run.py .

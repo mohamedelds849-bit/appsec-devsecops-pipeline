@@ -95,3 +95,9 @@ Docker Hub / GHCR, the Gitleaks SHA-256 from the release checksums file.
 5. Break one control on purpose in a branch (for example remove `AND customer_id = ?`), push,
    and see the `tests` job fail. Then delete the branch. That is your interview story.
 6. Read LEARN.md aloud, then answer the 21 questions without looking.
+
+## 5. CI history
+
+| Run | Date | Result | What happened |
+|---|---|---|---|
+| 1 (`38193848449`) | 2026-10-12 | 5/6 green, `container` red | The Trivy image gate failed on 2 HIGH CVEs with a fix available, both in packaging tools shipped by the `python:3.11-slim-trixie` base image, not in the app: `wheel` 0.45.1 (CVE-2026-24049) and `jaraco.context` 5.3.0 vendored inside setuptools (CVE-2026-23949). The gate did its job. Fix: `pip uninstall -y setuptools wheel` after installing the requirements, since the app never needs them at run time (smaller attack surface rather than a version bump). |

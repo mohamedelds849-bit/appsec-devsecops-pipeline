@@ -1,6 +1,6 @@
 # AgriSouss order portal (lab image, used by CI for Trivy image scan and ZAP baseline).
 # Debian 13 slim base, rebuilt often upstream; Dependabot proposes base image updates.
-FROM python:3.11-slim-trixie
+FROM python:3.14-slim-trixie
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
